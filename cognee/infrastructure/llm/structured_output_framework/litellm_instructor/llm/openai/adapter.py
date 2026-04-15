@@ -90,9 +90,17 @@ class OpenAIAdapter(GenericAPIAdapter):
         )
         self.llm_args = llm_args
         self.instructor_mode = instructor_mode if instructor_mode else self.default_instructor_mode
+        # Apply instructor mode when explicitly set (for models like DeepSeek that don't support JSON schema)
+        if self.instructor_mode and self.instructor_mode != "json_schema_mode":
+            self.aclient = instructor.from_litellm(
+                litellm.acompletion, mode=instructor.Mode(self.instructor_mode)
+            )
+            self.client = instructor.from_litellm(
+                litellm.completion, mode=instructor.Mode(self.instructor_mode)
+            )
         # TODO: With gpt5 series models OpenAI expects JSON_SCHEMA as a mode for structured outputs.
         #       Make sure all new gpt models will work with this mode as well.
-        if "gpt-5" in model:
+        elif "gpt-5" in model:
             self.aclient = instructor.from_litellm(
                 litellm.acompletion, mode=instructor.Mode(self.instructor_mode)
             )
@@ -112,7 +120,7 @@ class OpenAIAdapter(GenericAPIAdapter):
         retry=retry_if_not_exception_type(
             (litellm.exceptions.NotFoundError, litellm.exceptions.AuthenticationError)
         ),
-        before_sleep=before_sleep_log(logger, logging.DEBUG),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
         reraise=True,
     )
     async def acreate_structured_output(
