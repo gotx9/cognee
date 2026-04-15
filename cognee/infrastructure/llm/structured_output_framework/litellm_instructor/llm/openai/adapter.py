@@ -11,9 +11,17 @@ from tenacity import (
     retry,
     stop_after_delay,
     wait_exponential_jitter,
-    retry_if_not_exception_type,
+    retry_if_exception_type,
     before_sleep_log,
 )
+
+
+def should_retry(exception):
+    """Retry on auth errors, rate limits, but not on other errors."""
+    from litellm.exceptions import NotFoundError, AuthenticationError, RateLimitError
+
+    return isinstance(exception, (NotFoundError, AuthenticationError, RateLimitError))
+
 
 from cognee.infrastructure.llm.structured_output_framework.litellm_instructor.llm.generic_llm_api.adapter import (
     GenericAPIAdapter,
@@ -117,9 +125,7 @@ class OpenAIAdapter(GenericAPIAdapter):
     @retry(
         stop=stop_after_delay(128),
         wait=wait_exponential_jitter(8, 128),
-        retry=retry_if_not_exception_type(
-            (litellm.exceptions.NotFoundError, litellm.exceptions.AuthenticationError)
-        ),
+        retry=should_retry,
         before_sleep=before_sleep_log(logger, logging.WARNING),
         reraise=True,
     )
@@ -215,9 +221,7 @@ class OpenAIAdapter(GenericAPIAdapter):
     @retry(
         stop=stop_after_delay(128),
         wait=wait_exponential_jitter(2, 128),
-        retry=retry_if_not_exception_type(
-            (litellm.exceptions.NotFoundError, litellm.exceptions.AuthenticationError)
-        ),
+        retry=should_retry,
         before_sleep=before_sleep_log(logger, logging.DEBUG),
         reraise=True,
     )
